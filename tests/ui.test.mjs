@@ -9,7 +9,8 @@ test('UI renders all routes, a processing run and a saved decision without runti
  const location={hash:''},window={addEventListener(){},scrollTo(){}};
  const fixture={runs:[],purchaseOrders:PURCHASE_ORDERS,vendors:VENDORS,samples:SAMPLES};
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
- const app=await new AsyncFunction('document','window','location','fetch','navigator','setTimeout','clearTimeout',readFileSync(new URL('../public/app.js',import.meta.url),'utf8')+'; return {render,showLogin,formatMoney:money,renderFields:extracted,renderComparison:poComparison,setAuthView(mode){authView=mode;},openReview(id){reviewOpen=id;},setLive(value){live=value;},setRuns(runs){state.runs=runs;}};')(doc,window,location,async()=>({ok:true,json:async()=>fixture}),{},setTimeout,clearTimeout);
+ const app=await new AsyncFunction('document','window','location','fetch','navigator','setTimeout','clearTimeout',readFileSync(new URL('../public/app.js',import.meta.url),'utf8')+'; return {startup,render,showLogin,formatMoney:money,renderFields:extracted,renderComparison:poComparison,setAuthView(mode){authView=mode;},openReview(id){reviewOpen=id;},setLive(value){live=value;},setRuns(runs){state.runs=runs;}};')(doc,window,location,async()=>({ok:true,json:async()=>fixture}),{},setTimeout,clearTimeout);
+ await app.startup;
  assert.match(elements.get('#main').innerHTML,/Every invoice. Crystal clear/);
  assert.match(app.formatMoney(3741,'INR'),/\u20b93,741\.00/);assert.doesNotMatch(app.formatMoney(3741,'INR'),/\$/);assert.match(app.formatMoney(123,null),/currency unknown/);
  const rupees=extractInvoice('Example Supplier\nGrand Total: Rs. 3741.00');assert.match(app.renderFields(rupees,'pdf'),/INR - Indian Rupee/);assert.match(app.renderFields(rupees,'pdf'),/Currency detection/);

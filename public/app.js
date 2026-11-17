@@ -5,12 +5,14 @@ function uiIcon(name){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidd
 const recheckedRuns=new Map();
 const runForView=id=>recheckedRuns.get(id)||state.runs.find(r=>r.id===id);
 let appConfig={authMode:'local',directUploads:false,configured:true},signedIn=false,refreshInFlight=null;
-let demoClient=null,authView='login',reviewOpen=null;
+let demoClient=null,authView='login',reviewOpen=null,startupRevision=0,startupController=null;
+function cancelStartup(){startupRevision++;startupController?.abort();}
 async function sessionFetch(path,options){
  if(demoClient)return demoClient.fetch(path,options);
  let response=await fetch(path,options);
+ if(options?.signal?.aborted)throw new DOMException('Request cancelled','AbortError');
  if(response.status===401&&appConfig.authMode==='supabase'&&!path.startsWith('/api/auth/')){
-  if(!refreshInFlight)refreshInFlight=fetch('/api/auth/refresh',{method:'POST'}).finally(()=>refreshInFlight=null);
+  if(!refreshInFlight)refreshInFlight=fetch('/api/auth/refresh',{method:'POST',signal:options?.signal}).finally(()=>refreshInFlight=null);
   const refreshed=await refreshInFlight;if(refreshed.ok)response=await fetch(path,options);
  }
  return response;
@@ -19,9 +21,13 @@ function sessionControls(){const el=$('#auth-controls');if(el)el.innerHTML=demoC
 function showLogin(message=''){
  recheckedRuns.clear();sessionControls();
  const signup=authView==='signup';
- $('#main').innerHTML=`<section class="login-card panel"><span class="eyebrow">YOUR INVOICE WORKSPACE</span><h1>${signup?'Your workspace starts here.':'Welcome back.'}</h1><p>${signup?'Create a private account to process invoices and save your review decisions.':'Sign in to review invoices and keep your decisions in one place.'}</p><div class="auth-tabs"><button type="button" class="button ${signup?'secondary':'primary'} small" data-action="auth-mode" data-mode="login">Sign in</button><button type="button" class="button ${signup?'primary':'secondary'} small" data-action="auth-mode" data-mode="signup">Create account</button></div><form id="login-form"><label>Email address<input id="login-email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label><label>Password<input id="login-password" type="password" autocomplete="${signup?'new-password':'current-password'}" required minlength="${signup?8:1}" maxlength="1024" placeholder="${signup?'At least 8 characters':'Your password'}"></label>${signup?'<label>Confirm password<input id="signup-confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="1024" placeholder="Enter your password again"></label>':''}${message?`<div class="info-panel auth-message" role="status">${esc(message)}</div>`:''}<button class="button primary" type="submit">${signup?'Create account':'Sign in'} <span>&#8599;</span></button></form><div class="demo-entry"><strong>Want to look around first?</strong><p>Open a demo with sample invoices and a pending human review. No account needed.</p><button type="button" class="button secondary" data-action="open-demo">Open demo workspace</button><small>Demo data stays in this browser and is separate from your account.</small></div></section>`;
+ $('#main').innerHTML=`<section class="login-card panel"><span class="eyebrow">YOUR INVOICE WORKSPACE</span><h1>${signup?'Your workspace starts here.':'Welcome back.'}</h1><p>${signup?'Create a private account to process invoices and save your review decisions.':'Sign in to review invoices and keep your decisions in one place.'}</p><div id="startup-message" class="info-panel auth-message" role="status" hidden></div><div class="auth-tabs"><button type="button" class="button ${signup?'secondary':'primary'} small" data-action="auth-mode" data-mode="login">Sign in</button><button type="button" class="button ${signup?'primary':'secondary'} small" data-action="auth-mode" data-mode="signup">Create account</button></div><form id="login-form"><label>Email address<input id="login-email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label><label>Password<input id="login-password" type="password" autocomplete="${signup?'new-password':'current-password'}" required minlength="${signup?8:1}" maxlength="1024" placeholder="${signup?'At least 8 characters':'Your password'}"></label>${signup?'<label>Confirm password<input id="signup-confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="1024" placeholder="Enter your password again"></label>':''}${message?`<div class="info-panel auth-message" role="status">${esc(message)}</div>`:''}<button class="button primary" type="submit">${signup?'Create account':'Sign in'} <span>&#8599;</span></button></form><div class="demo-entry"><strong>Want to look around first?</strong><p>Open a demo with sample invoices and a pending human review. No account needed.</p><button type="button" class="button secondary" data-action="open-demo">Open demo workspace</button><small>Demo data stays in this browser and is separate from your account.</small></div></section>`;
 }
-async function openDemo(){const module=await import('/demo.js');demoClient=module.createDemoClient();await demoClient.start();sessionStorage.setItem('invoicepilot-demo','1');appConfig={authMode:'demo',directUploads:false,configured:true};recheckedRuns.clear();reviewOpen=null;await load();location.hash='overview';render();}
+async function openDemo(){
+ const revision=startupRevision,module=await import('/demo.js'),client=module.createDemoClient();await client.start();
+ const saved=await(await client.fetch('/api/state')).json();if(revision!==startupRevision)return;
+ demoClient=client;sessionStorage.setItem('invoicepilot-demo','1');appConfig={authMode:'demo',directUploads:false,configured:true};recheckedRuns.clear();reviewOpen=null;state=saved;signedIn=true;sessionControls();$('#queue-count').textContent=state.runs.filter(r=>r.status==='review').length;location.hash='overview';render();
+}
 async function submitInvoice(file,input,readDuration){
  const metadata={text:input.text,method:input.method,ocrConfidence:input.ocrConfidence??null,readDurationMs:readDuration};
  if(!appConfig.directUploads){const form=new FormData();form.append('file',file);for(const [key,value]of Object.entries(metadata))if(value!==null)form.append(key,String(value));return sessionFetch('/api/runs',{method:'POST',body:form});}
@@ -72,7 +78,7 @@ function extracted(i,method){return `<section class="panel"><div class="panel-to
 function outcome(r){return `<section class="decision-panel ${r.status}"><span class="decision-symbol">${r.status==='approved'?'✓':r.status==='review'?'!':'⊘'}</span><div><span class="eyebrow">DECISION</span><h2>${statusName[r.status]}</h2><p>${esc(r.summary)}</p>${r.reasons.length?`<ul>${r.reasons.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:''}</div></section>${humanReviewPanel(r)}${extracted(r.invoice,r.method)}${poComparison(r)}<section class="panel"><div class="panel-top"><h3>The decision trail</h3><span class="badge neutral">${r.checks.length} checks</span></div><div class="checks-list">${r.checks.map(c=>`<div class="check"><span class="check-state ${c.state}">${c.state==='pass'?'✓':c.state==='fail'?'×':c.state==='review'?'!':'i'}</span><div class="check-copy"><h4>${esc(c.label)}</h4><p>${esc(c.detail)}</p></div><span class="check-badge">${esc(c.state)}</span></div>`).join('')}</div>${evidenceMarkup(r.invoice)}<div class="raw-text"><details><summary>View source text & file fingerprint</summary><pre>${esc(r.rawText)}\n\nSHA-256: ${esc(r.fileHash)}\nRun: ${esc(r.id)}</pre></details></div><div class="copy-row"><button class="button secondary small" data-action="copy-note" data-id="${r.id}">Copy review note</button><button class="button secondary small" data-action="export-run" data-id="${r.id}">↓ Export decision</button></div></section>`;}
 function runPage(run,liveMode=false){const allDone=liveMode?null:Object.fromEntries(stageDefs.map(([k])=>[k,{state:'done',detail:k==='read'?(run.method==='ocr'?'Scanned document recognised with OCR.':run.method==='manual'?'Manual transcription supplied; human review is mandatory.':'Source document read.'):k==='extract'?'Invoice fields extracted.':k==='validate'?'Required fields and duplicate checks completed.':k==='match'?(run.matchedPO?.id??'No unambiguous PO match'):run.summary}]));const stages=liveMode?live.stages:allDone;if(!liveMode&&run.stages){for(const event of run.stages)if(event.state==='done')stages[event.stage]={state:'done',detail:event.detail};if(run.readDurationMs)stages.read.detail+=' '+(run.readDurationMs/1000).toFixed(1)+'s reading time.';}
 return `<div class="run-header"><div><a class="back-link" href="#queue">← Back to invoices</a><h1>${liveMode?'Following the invoice.':esc(run.invoice.invoiceNumber||'Invoice review')}</h1><p>${esc(liveMode?live.fileName:run.fileName)} <span class="muted">·</span> ${liveMode?'Processing live':time(run.createdAt)}</p></div><div class="run-actions">${liveMode?(live.error?'<span class="badge rejected">Processing failed</span>':'<span class="badge neutral"><span class="spinner"></span> Processing</span>'):`<a class="button primary small" href="/api/runs/${run.id}/report.pdf${run.analysisOnly?'?recheck=1':''}" download>Download report PDF</a><button class="button secondary small" data-action="recheck-run" data-id="${run.id}">Recheck analysis</button><a class="button secondary small" href="/api/runs/${run.id}/file" target="_blank" rel="noopener">View source ↗</a><button class="button primary small" data-action="upload">New invoice ＋</button>`}</div></div>${!liveMode&&run.analysisOnly?`<div class="info-panel recheck-notice"><h4>Latest analysis preview</h4><p>Fields were re-read using the current parser. Original saved decision: <b>${statusName[run.originalStatus]}</b>. This preview changes no saved records or PO balances. Its PDF report is available above.</p></div>`:''}<div class="run-grid"><aside>${stageMarkup(stages)}<p class="run-side-note">Each stage reflects actual processing. Decisions are saved with their source, checks and reasoning.</p></aside><div class="run-main">${liveMode?`${live.invoice?extracted(live.invoice,live.method):''}<section class="panel pending-output">${live.error?'<span class="empty-icon">!</span>':'<span class="spinner"></span>'}<h3>${live.error?'This run needs a retry.':'A decision is taking shape.'}</h3><p>${esc(live.error||'The final outcome appears after all checks are complete.')}</p>${live.error?'<button class="button secondary small" style="margin-top:17px" data-action="upload">Try another invoice</button>':''}</section>`:outcome(run)}</div></div>`;}
-function render(){if(appConfig.authMode==='supabase'&&!signedIn){showLogin();return;}const hash=location.hash.slice(1)||'overview',route=hash.split('/')[0];const nav=['overview','queue','orders','playbook'].includes(route)?route:'queue';document.querySelectorAll('[data-nav]').forEach(a=>{a.classList.toggle('active',a.dataset.nav===nav);if(a.dataset.nav===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});$('#crumb').textContent={overview:'Overview',queue:'Invoice queue',orders:'Purchase orders',playbook:'Rules & demo'}[nav];
+function render(){if(!signedIn){showLogin();return;}const hash=location.hash.slice(1)||'overview',route=hash.split('/')[0];const nav=['overview','queue','orders','playbook'].includes(route)?route:'queue';document.querySelectorAll('[data-nav]').forEach(a=>{a.classList.toggle('active',a.dataset.nav===nav);if(a.dataset.nav===nav)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});$('#crumb').textContent={overview:'Overview',queue:'Invoice queue',orders:'Purchase orders',playbook:'Rules & demo'}[nav];
 if(route==='live'&&live){$('#main').innerHTML=runPage(null,true);return;}
 if(route==='run'){const r=runForView(hash.split('/')[1]);$('#main').innerHTML=r?runPage(r):'<div class="error-page"><h2>That run is not here.</h2><p>It may have been cleared with the demo runs.</p><a class="button secondary" href="#queue">Back to invoices</a></div>';return;}
 $('#main').innerHTML=route==='queue'?queue():route==='orders'?orders():route==='playbook'?playbook():overview();if(route==='queue')fillQueue();}
@@ -109,8 +115,8 @@ document.addEventListener('click',async event=>{
   event.preventDefault();try{const response=await sessionFetch(link.getAttribute('href'));if(!response.ok)throw new Error((await response.json()).error);const blob=await response.blob(),url=URL.createObjectURL(blob);if(link.hasAttribute('download')){const a=document.createElement('a');a.href=url;a.download=link.getAttribute('download')||response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||'invoice.pdf';a.click();}else{const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();}setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(error){toast(error.message,true);}return;
  }
  const button=event.target.closest('[data-action]');if(!button)return;
- if(button.dataset.action==='auth-mode'){authView=button.dataset.mode;showLogin();}
- if(button.dataset.action==='open-demo'){button.disabled=true;try{await openDemo();}catch(error){demoClient=null;signedIn=false;showLogin(error.message);}}
+ if(button.dataset.action==='auth-mode'){cancelStartup();authView=button.dataset.mode;showLogin();}
+ if(button.dataset.action==='open-demo'){cancelStartup();button.disabled=true;try{await openDemo();}catch(error){demoClient=null;signedIn=false;showLogin(error.message);}}
  if(button.dataset.action==='exit-demo'){if(busy)return toast('Wait for processing to finish.');sessionStorage.removeItem('invoicepilot-demo');location.reload();}
  if(button.dataset.action==='review-open'){if(busy)return toast('Wait for processing to finish.');recheckedRuns.delete(button.dataset.id);reviewOpen=button.dataset.id;render();document.querySelector('.human-review')?.scrollIntoView({behavior:'smooth',block:'start'});}
  if(button.dataset.action==='review-cancel'){reviewOpen=null;render();}
@@ -118,7 +124,7 @@ document.addEventListener('click',async event=>{
 
 document.addEventListener('click',async e=>{
 const row=e.target.closest('[data-run]');if(row&&!e.target.closest('a,button')){location.hash='run/'+row.dataset.run;return;}
-const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;if(action==='filter-status'){filter=b.dataset.filter;search='';location.hash='queue';render();return;}if(action==='logout'){if(busy)return toast('Wait for the current invoice to finish.');try{await api('/api/auth/logout',{method:'POST'});signedIn=false;recheckedRuns.clear();state.runs=[];$('#queue-count').textContent='0';showLogin();}catch(error){toast(error.message,true);}return;}
+const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;if(action==='filter-status'){filter=b.dataset.filter;search='';location.hash='queue';render();return;}if(action==='logout'){cancelStartup();if(busy)return toast('Wait for the current invoice to finish.');try{await api('/api/auth/logout',{method:'POST'});signedIn=false;recheckedRuns.clear();state.runs=[];$('#queue-count').textContent='0';showLogin();}catch(error){toast(error.message,true);}return;}
 if(action==='recheck-run'){if(busy)return toast('Wait for the current invoice to finish.');b.disabled=true;try{const result=await api('/api/runs/'+b.dataset.id+'/recheck');recheckedRuns.set(result.id,result);render();toast('Latest analysis ready. Saved decision and balances are unchanged.');}catch(error){toast(error.message,true);b.disabled=false;}return;}
 if(action==='upload')showUpload();
 if(action==='close-upload')$('#upload-dialog').close();
@@ -140,7 +146,7 @@ $('#dropzone').addEventListener('drop',e=>{e.preventDefault();$('#dropzone').cla
 $('#confirm-reset').addEventListener('click',async()=>{const b=$('#confirm-reset');b.disabled=true;try{const result=await api('/api/reset-demo',{method:'POST'});$('#confirm-dialog').close();recheckedRuns.clear();await load();render();toast(result.cleared+' demo runs cleared.');}catch(error){toast(error.message,true);}finally{b.disabled=false;}});
 window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0,behavior:'instant'});});
 $('#today').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-try{if(globalThis.sessionStorage?.getItem('invoicepilot-demo')==='1')await openDemo();else{appConfig={...appConfig,...await api('/api/config')};if(appConfig.configured===false)throw new Error('The workspace owner needs to finish the server setup before sign-in is available.');await load();render();}}catch(error){if(error.status===401&&appConfig.authMode==='supabase'){showLogin();}else{$('#main').innerHTML=`<div class="error-page"><h2>The workspace couldn't open.</h2><p>${esc(error.message)}</p><button class="button secondary" id="retry">Try again</button></div>`;$('#retry').onclick=()=>location.reload();}}
+
 
 document.addEventListener('submit',async event=>{
  if(event.target.id==='review-form'){
@@ -151,9 +157,29 @@ document.addEventListener('submit',async event=>{
   catch(error){const el=$('#review-error');if(el){el.textContent=error.message;el.hidden=false;}toast(error.message,true);form.querySelectorAll('button').forEach(b=>b.disabled=false);}finally{busy=false;}return;
  }
  if(event.target.id!=='login-form')return;
- event.preventDefault();const email=$('#login-email').value,password=$('#login-password').value,signup=authView==='signup',button=event.target.querySelector('button');
+ event.preventDefault();cancelStartup();const email=$('#login-email').value,password=$('#login-password').value,signup=authView==='signup',button=event.target.querySelector('button');
  if(signup&&password!==$('#signup-confirm').value){toast('Passwords do not match.',true);return;}
  button.disabled=true;
- try{const data=await api('/api/auth/'+(signup?'signup':'login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});$('#login-password').value='';if(data.confirmationRequired){authView='login';showLogin(data.message);$('#login-email').value=email;return;}authView='login';await load();render();}
+ try{const data=await api('/api/auth/'+(signup?'signup':'login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});$('#login-password').value='';if(data.confirmationRequired){authView='login';showLogin(data.message);$('#login-email').value=email;return;}appConfig={...appConfig,...await api('/api/config')};authView='login';await load();render();}
  catch(error){signedIn=false;showLogin(error.message);$('#login-email').value=email;}
 });
+
+// Install all form handlers before starting network work. The public sign-in
+// shell is already in the HTML, so session checks never block its first paint.
+async function initializeWorkspace(){
+ const revision=startupRevision;startupController=new AbortController();const signal=startupController.signal;
+ if(!$('#main').innerHTML.includes('id="login-form"'))showLogin();
+ try{
+  if(globalThis.sessionStorage?.getItem('invoicepilot-demo')==='1'){await openDemo();return;}
+  const config=await api('/api/config',{signal});if(revision!==startupRevision)return;
+  appConfig={...appConfig,...config};
+  if(appConfig.configured===false)throw new Error('The workspace owner needs to finish the server setup before sign-in is available. You can still open the browser demo.');
+  const saved=await api('/api/state',{signal});if(revision!==startupRevision)return;
+  state=saved;signedIn=true;sessionControls();$('#queue-count').textContent=state.runs.filter(r=>r.status==='review').length;render();
+ }catch(error){
+  if(signal.aborted||revision!==startupRevision)return;
+  if(error.status===401&&appConfig.authMode==='supabase')return;
+  const notice=$('#startup-message');notice.textContent=error.message;notice.hidden=false;
+ }
+}
+const startup=initializeWorkspace();
