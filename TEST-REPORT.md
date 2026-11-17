@@ -68,3 +68,9 @@ Seven added tests cover a synthetic ERP/GST layout, inline dates, Rs./Indian mon
 ## Currency regression checks
 
 Five currency tests cover rupee spellings/symbols, INR grouping, country-qualified dollar notation, absent or ambiguous currencies, conflicting indicators and independent invoice/PO currency labels in the PDF. UI checks assert that INR amounts use the rupee symbol and missing invoice currency is never replaced with the PO currency. All 57 tests pass.
+
+## Signup, isolated browser demo and human review update
+
+66 automated tests pass. Added coverage includes signup with confirmation or immediate session, disabled signup and rate-limit messages, cross-origin blocking, seeded demo isolation and persistence, sample/source/report access, duplicate checks, and demo reset. Human-review tests cover corrections, reasons, review acknowledgement, verified non-PO exceptions, owner isolation, reviewer identity from the authenticated session, PDF audit evidence, repeat-decision rejection, duplicate corrections, concurrent PO balance protection in SQLite and PostgreSQL, and rejection with incomplete source data. UI rendering checks cover signup, confirmation-password, demo entry, review fields and both decision controls.
+
+`npm run build:vercel` succeeds. Actual Vercel/Supabase integration requires applying `supabase/review-migration.sql` and enabling user email signups in that project. The new controls were not visually browser-verified in this session: the in-app browser timed out reaching localhost and the native browser could not be selected while minimized. Prior browser verification above describes the earlier build; it does not establish live verification of this update.

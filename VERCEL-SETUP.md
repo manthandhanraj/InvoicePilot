@@ -7,10 +7,20 @@ The application has a Vercel Functions entry point and Supabase-backed authentic
 1. Create a Supabase project in your own account. Save your database password securely; this app does not need that password in Vercel.
 2. Open the SQL editor and run the complete contents of **supabase/schema.sql** once. It creates the tables, private `invoicepilot` bucket, row-level policies and server-only transaction functions.
 3. In Authentication / Users, create your candidate account with an email and password and ensure its email is confirmed. Create a separate confirmed account for a reviewer if needed. Each account has its own invoice history and PO allocations.
-4. Keep public sign-up disabled for this private case-study workspace. The application intentionally provides sign-in rather than public registration.
+4. Enable **Allow new users to sign up** in Supabase Authentication settings to use the app's **Create account** form. Enable the Email provider. Keep email confirmation enabled if desired: the app will ask users to confirm by email and then sign in. Set Authentication / URL Configuration / Site URL to your deployed Vercel URL so confirmation links return to the app. Supabase applies its signup and email rate limits; the app displays a retry message when a limit is reached.
 5. From your project's API settings, copy the project URL, the legacy **anon** key and the legacy **service_role** key. Use the service-role key only in server environment variables.
 
 The project SQL does not require your service-role key to be pasted into the SQL editor. It creates a private bucket; do not make the bucket public.
+
+## Existing deployments: add signup, browser demo and human review
+
+1. Run **supabase/review-migration.sql** once in the Supabase SQL Editor. It adds the server-only human review function without deleting existing data. New projects that run the full schema already include this function.
+2. Enable new user signups and configure the Email provider and Site URL as described above. The app does not bypass email confirmation, CAPTCHA requirements or project signup settings. If you enabled a custom CAPTCHA, configure its UI before using public signup; this build uses the standard email/password signup flow.
+3. Push the updated source and let Vercel deploy the new commit. No additional environment variables are required.
+4. Check **Create account**, confirmation instructions, **Sign in**, and **Open demo workspace**. The demo needs no credentials and stores records in this browser's IndexedDB, separately from Supabase accounts. Two synthetic invoices are seeded on first entry: an approved invoice and an invoice awaiting review. Original demo documents, PDF reports, duplicate checks and review decisions work locally; clearing browser storage removes this demo data.
+5. Open **Invoice queue**, filter **Needs review**, open an invoice, and select **Review invoice**. Compare the source and findings, correct required fields, select a PO, enter a reason and acknowledge the review. Choose **Approve invoice** or **Reject invoice**. Rejection requires a reason but can proceed when invoice fields are incomplete.
+6. Missing PO: select and verify the right PO. For a verified non-PO invoice, clear the PO selection and explicitly confirm the non-PO exception; no PO allocation is recorded. PO supplier/currency mismatch, closed POs, overbilling, duplicates and explicitly blocked vendors cannot be approved until the blocking issue is resolved.
+7. Confirm the saved outcome, reviewer, reason, timestamp, field changes and original automatic findings in the invoice detail and PDF report. Approvals reserve balances atomically; pending and rejected invoices do not. Repeat submissions of a human decision are rejected. Each signed-in owner reviews only their own invoices; there is no cross-account reviewer role or shared queue in this version.
 
 ## 2. Add the source to your personal Git repository
 

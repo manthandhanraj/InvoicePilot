@@ -16,6 +16,7 @@ export function supabaseClient(config,fetcher=fetch){
  return {
   async getUser(token){if(!token)return null;try{const u=await request('/auth/v1/user',{token});return UUID.test(u.id)?{id:u.id,email:u.email}:null;}catch(error){if(error.status===401||error.status===403)return null;throw error;}},
   signIn:(email,password)=>request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}}),
+  signUp:(email,password)=>request('/auth/v1/signup',{method:'POST',body:{email,password}}),
   refresh:token=>request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:token}}),
   signOut:token=>request('/auth/v1/logout?scope=local',{method:'POST',token}),
   forOwner(owner){if(!UUID.test(owner))throw new Error('Invalid user identity');
@@ -23,6 +24,7 @@ export function supabaseClient(config,fetcher=fetch){
     async history(){const rows=await request('/rest/v1/ip_runs?owner_id=eq.'+owner+'&select=payload&order=created_at.desc&limit=1000',{admin:true});return rows.map(r=>r.payload);},
     ledger:()=>rpc('ip_ledger',{p_owner:owner}),
     persist:(_owner,run)=>rpc('ip_persist_run',{p_owner:owner,p_run:run}),
+    review:(id,run)=>rpc('ip_review_run',{p_owner:owner,p_id:id,p_run:run}),
     async getRun(id){if(!UUID.test(id))return null;const rows=await request('/rest/v1/ip_runs?owner_id=eq.'+owner+'&id=eq.'+id+'&select=payload&limit=1',{admin:true});return rows[0]?.payload??null;},
     async createUpload(name,size,mime){const id=crypto.randomUUID();await rpc('ip_create_upload',{p_owner:owner,p_id:id,p_name:name,p_size:size,p_mime:mime});const path=objectPath(owner,id);try{const signed=await request('/storage/v1/object/upload/sign/invoicepilot/'+path,{method:'POST',admin:true,body:{}});const url=new URL(base+'/storage/v1'+signed.url);if(url.origin!==parsed.origin)throw new Error('Unexpected upload URL');return {id,url:url.toString(),path};}catch(error){await rpc('ip_abort_upload',{p_owner:owner,p_id:id}).catch(()=>{});throw error;}},
     consumeUpload(id){if(!UUID.test(id))throw new Error('Invalid upload identity');return rpc('ip_consume_upload',{p_owner:owner,p_id:id});},

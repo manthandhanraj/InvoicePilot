@@ -10,6 +10,13 @@ export async function supabaseFixture(base='https://fixture.supabase.co'){
   calls.push({method:req.method,path,size:Number(req.headers.get('content-length')||0)});
   const token=req.headers.get('authorization')?.replace(/^Bearer /,''),service=req.headers.get('apikey')===config.SUPABASE_SERVICE_ROLE_KEY;
   try{
+   if(path==='/auth/v1/signup'){
+    const body=await req.json();
+    if(body.email==='disabled@example.test')return reply({msg:'Signups not allowed for this instance'},422);
+    if(body.email==='limited@example.test')return reply({msg:'Rate limit exceeded'},429);
+    if(body.email==='confirmed@example.test')return reply({access_token:'access-b',refresh_token:'refresh-a',expires_in:3600,user:users['access-b']});
+    return reply({id:OWNER_B,email:body.email});
+   }
    if(path==='/auth/v1/token'){
     const body=await req.json();
     if(url.searchParams.get('grant_type')==='refresh_token')return body.refresh_token==='refresh-a'?reply({access_token:'access-a',refresh_token:'refresh-a',expires_in:3600}):reply({message:'Invalid refresh token'},401);

@@ -15,4 +15,10 @@ npm run build
 npm run dev
 ```
 
-57 automated checks pass, including PostgreSQL and Vercel adapter tests. Browser verification covers real text PDFs, complete and incomplete scanned PDFs, PNG/JPEG OCR, the four principal edge cases, exports, filters, error handling and a mobile viewport. See TEST-REPORT.md for the verified scope. The Vercel/Supabase adapter is ready for your project configuration. Its hosted Auth/Storage integration still needs the deployed smoke test described in the setup guide. Deployment and recording are intentionally left to the candidate; no live submission URL or video is included.
+66 automated checks pass, including PostgreSQL and Vercel adapter tests. Browser verification covers real text PDFs, complete and incomplete scanned PDFs, PNG/JPEG OCR, the four principal edge cases, exports, filters, error handling and a mobile viewport. See TEST-REPORT.md for the verified scope. The Vercel/Supabase adapter is ready for your project configuration. Its hosted Auth/Storage integration still needs the deployed smoke test described in the setup guide. Deployment and recording are intentionally left to the candidate; no live submission URL or video is included.
+
+## Accounts, demo and human decisions
+
+The sign-in page now offers Create account and Open demo workspace. The demo runs the shared extraction/review logic with synthetic invoices and saves only in this browser. Each real account keeps its own Supabase records. Needs-review invoices have a Review invoice action, editable essential fields, a required review reason, and Approve/Reject controls. Human decisions and original automatic findings appear in the saved invoice and PDF report.
+
+For an existing deployment, run `supabase/review-migration.sql` once, enable Supabase new-user email signups, set the live Site URL and redeploy. See VERCEL-SETUP.md. These additions have automated API/PostgreSQL/demo and UI-rendering coverage; the newly deployed signup and review controls still need a live browser check.

@@ -26,6 +26,20 @@ export function createVercelHandler(worker,config,fetcher=fetch,waitUntil=promis
   try{sb=supabaseClient(config,fetcher);}catch{return json({error:'Supabase server configuration is invalid. Check the project URL and server keys.'},503);}
   try{
    const jar=cookies(request);
+   if(path==='/api/auth/signup'&&request.method==='POST'){
+    const raw=await request.text();if(raw.length>8192)return json({error:'Account request is too large.'},413);
+    let body;try{body=JSON.parse(raw);}catch{return json({error:'Invalid account request.'},400);}
+    const {email,password}=body||{};
+    if(typeof email!=='string'||email.length>254||!/^\S+@\S+\.\S+$/.test(email.trim())||typeof password!=='string'||password.length<8||password.length>1024)return json({error:'Enter a valid email and a password of at least 8 characters.'},400);
+    try{
+     const result=await sb.signUp(email.trim(),password);
+     if(result.access_token&&result.refresh_token)return withSession(json({signedIn:true,user:{email:result.user?.email||email}}),result,request);
+     return json({confirmationRequired:true,message:'Check your email to confirm your account, then return here and sign in. If you already have an account, sign in.'});
+    }catch(error){
+     const message=String(error.message||'');
+     return json({error:error.status===429?'Too many account requests. Please try again later.':/signup.*disabled|signups.*allowed/i.test(message)?'Account creation is disabled in Supabase. The owner must enable Allow new users to sign up.':/password/i.test(message)?'Choose a stronger password with at least 8 characters.':!error.status||error.status>=500?'The account service is unavailable. Please try again shortly.':'Account creation could not complete. Check your details or sign in if you already have an account.'},error.status===429?429:400);
+    }
+   }
    if(path==='/api/auth/login'&&request.method==='POST'){
     if(Number(request.headers.get('content-length'))>8192)return json({error:'Sign-in request is too large.'},413);
     const {email,password}=await request.json();
@@ -43,7 +57,7 @@ export function createVercelHandler(worker,config,fetcher=fetch,waitUntil=promis
    const account=await sb.getUser(jar.ip_access);
    if(!account)return json({error:'Sign in to access this invoice workspace.'},401);
    if(path==='/api/auth/me'&&request.method==='GET')return json({user:account});
-   const env=sb.forOwner(account.id);
+   const env={...sb.forOwner(account.id),REVIEWER:account};
    if(path==='/api/uploads'&&request.method==='POST'){
     if(Number(request.headers.get('content-length'))>8192)return json({error:'Upload metadata is too large.'},413);
     const body=await request.json();

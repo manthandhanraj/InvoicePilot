@@ -1,6 +1,7 @@
 import { VENDORS, PURCHASE_ORDERS, POLICY, SAMPLES } from './data.js';
 import { extractInvoice, evaluateInvoice, cents, summarizeDocumentChecks } from './engine.js';
 import { invoiceReportPDF } from './report.js';
+import { prepareHumanReview } from './review.js';
 
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});}
 async function user(request,env){if(env.resolveUser)return env.resolveUser(request);const id=request.headers.get('oai-authenticated-user-id');if(id)return id;const u=new URL(request.url);return ['localhost','127.0.0.1','[::1]'].includes(u.hostname)?'local_demo':null;}
@@ -48,6 +49,7 @@ export default {
    if(path==='/comfort.css')return new Response(COMFORT,{headers:{'Content-Type':'text/css;charset=utf-8'}});
  if(path==='/neon.css')return new Response(NEON,{headers:{'Content-Type':'text/css;charset=utf-8'}});
    if(path==='/app.js')return new Response(CLIENT,{headers:{'Content-Type':'text/javascript;charset=utf-8'}});
+   if(path==='/demo.js')return new Response(DEMO,{headers:{'Content-Type':'text/javascript;charset=utf-8'}});
    if(path==='/favicon.svg')return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#123b35"/><path d="M18 16h28v32H18z" fill="none" stroke="#bce6ce" stroke-width="4"/><path d="m24 32 6 6 12-13" fill="none" stroke="#bce6ce" stroke-width="4"/></svg>',{headers:{'Content-Type':'image/svg+xml'}});
    if(!path.startsWith('/api/'))return json({error:'Not found'},404);
    if(path==='/api/config'&&request.method==='GET')return json({authMode:env.AUTH_MODE||'local',directUploads:Boolean(env.REPO),configured:true});
@@ -68,6 +70,18 @@ export default {
      const ids=demos.results.map(r=>r.id);
      if(ids.length){const statements=[];for(const id of ids){statements.push(env.DB.prepare('DELETE FROM claims WHERE owner_id=? AND run_id=?').bind(owner,id));statements.push(env.DB.prepare('DELETE FROM approvals WHERE owner_id=? AND run_id=?').bind(owner,id));}statements.push(env.DB.prepare('DELETE FROM runs WHERE owner_id=? AND is_demo=1').bind(owner));await env.DB.batch(statements);await Promise.allSettled(ids.map(id=>env.BUCKET.delete(owner+'/'+id)));}
      return json({cleared:ids.length});
+   }
+   const reviewMatch=path.match(/^\/api\/runs\/([a-z0-9-]+)\/review$/);
+   if(reviewMatch&&request.method==='POST'){
+    const raw=await request.text();if(raw.length>16000)return json({error:'Review request is too large.'},413);
+    let input;try{input=JSON.parse(raw);}catch{return json({error:'Invalid review request.'},400);}
+    const record=await storedRun(env,owner,reviewMatch[1]);if(!record)return json({error:'Run not found'},404);
+    const [previous,committed]=await Promise.all([history(env,owner),ledger(env,owner)]);
+    let reviewed;try{
+     reviewed=prepareHumanReview(record,input,previous,committed,env.REVIEWER||{id:owner,email:null});
+     reviewed=env.REPO?await env.REPO.review(record.id,reviewed):await env.DB.review(owner,record.id,reviewed);
+    }catch(error){return json({error:/ip_review_run/.test(error.message)?'Review setup is pending. Run supabase/review-migration.sql in the Supabase SQL Editor.':error.message},error.status||409);}
+    return json({...reviewed,documentAnalysis:summarizeDocumentChecks(reviewed.checks)});
    }
    const reportMatch=path.match(/^\/api\/runs\/([a-z0-9-]+)\/(recheck|report\.pdf)$/);
    if(reportMatch&&request.method==='GET'){
