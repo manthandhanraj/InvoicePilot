@@ -50,7 +50,7 @@ export default {
  if(path==='/neon.css')return new Response(NEON,{headers:{'Content-Type':'text/css;charset=utf-8'}});
    if(path==='/app.js')return new Response(CLIENT,{headers:{'Content-Type':'text/javascript;charset=utf-8'}});
    if(path==='/demo.js')return new Response(DEMO,{headers:{'Content-Type':'text/javascript;charset=utf-8'}});
-   if(path==='/favicon.svg')return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#123b35"/><path d="M18 16h28v32H18z" fill="none" stroke="#bce6ce" stroke-width="4"/><path d="m24 32 6 6 12-13" fill="none" stroke="#bce6ce" stroke-width="4"/></svg>',{headers:{'Content-Type':'image/svg+xml'}});
+   if(path==='/favicon.svg')return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#e11d48"/><path d="M18 16h28v32H18z" fill="none" stroke="#fff1f5" stroke-width="4"/><path d="m24 32 6 6 12-13" fill="none" stroke="#fff1f5" stroke-width="4"/></svg>',{headers:{'Content-Type':'image/svg+xml'}});
    if(!path.startsWith('/api/'))return json({error:'Not found'},404);
    if(path==='/api/config'&&request.method==='GET')return json({authMode:env.AUTH_MODE||'local',directUploads:Boolean(env.REPO),configured:true});
    const owner=await user(request,env);if(!owner)return json({error:'Sign in to access this invoice workspace.'},401);
