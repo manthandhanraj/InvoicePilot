@@ -1,0 +1,11 @@
+import {readFileSync,writeFileSync,mkdirSync,cpSync,readdirSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {SAMPLES} from '../src/data.js';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const dir=new URL('../dist/',import.meta.url);mkdirSync(new URL('server/',dir),{recursive:true});mkdirSync(new URL('.openai/',dir),{recursive:true});
+const files={},hashes={};for(const s of SAMPLES){const bytes=readFileSync(new URL('../samples/'+s.file,import.meta.url));files[s.id]=bytes.toString('base64');hashes[s.id]=createHash('sha256').update(bytes).digest('hex');}
+const constants={HTML:read('public/index.html'),CSS:read('public/style.css'),COMFORT:read('public/comfort.css'),NEON:read('public/neon.css'),CLIENT:read('public/app.js'),SAMPLE_FILES:files,SAMPLE_HASHES:hashes};
+let output=Object.entries(constants).map(([k,v])=>'const '+k+' = '+JSON.stringify(v)+';').join('\n')+'\n';
+for(const p of ['src/data.js','src/extraction.js','src/engine.js','src/report.js','src/worker.js'])output+=read(p).replace(/^import .+;\r?\n/gm,'').replace(/^export \{[^}]+\};\r?\n/gm,'').replace(/export (const|function) /g,'$1 ')+'\n';
+writeFileSync(new URL('server/index.js',dir),output);cpSync(new URL('../.openai/hosting.json',import.meta.url),new URL('.openai/hosting.json',dir));cpSync(new URL('../drizzle/',import.meta.url),new URL('.openai/drizzle/',dir),{recursive:true});
+console.log('Built invoice workspace, embedded browser assets, sample PDFs and database migrations.');

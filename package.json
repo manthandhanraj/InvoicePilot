@@ -1,0 +1,24 @@
+{
+  "name": "invoicepilot",
+  "private": true,
+  "type": "module",
+  "engines": {"node":"24.x"},
+  "scripts": {
+    "pretest": "node scripts/build.mjs",
+    "prevalidate": "node scripts/build.mjs",
+    "start": "node scripts/run.mjs --open",
+    "build": "node scripts/build.mjs",
+    "build:vercel": "node scripts/build-vercel.mjs",
+    "dev": "node scripts/dev.mjs",
+    "predev:vercel": "node scripts/build-vercel.mjs",
+    "dev:vercel": "node --env-file-if-exists=.env.local scripts/dev-vercel.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "validate": "node scripts/validate-artifact.mjs"
+  },
+  "dependencies": {
+    "@vercel/functions": "3.11.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14"
+  }
+}

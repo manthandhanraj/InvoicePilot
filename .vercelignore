@@ -1,0 +1,10 @@
+.git
+.local
+.openai
+outputs
+tests
+scripts/qa-supabase.mjs
+scripts/dev-vercel.mjs
+.env*
+.dev.vars*
+node_modules

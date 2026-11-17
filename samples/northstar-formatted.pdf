@@ -1,0 +1,53 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 625 >>
+stream
+0.09 0.25 0.21 rg
+BT
+/F1 20 Tf
+50 780 Td
+(INVOICE) Tj
+/F1 11 Tf
+0 -44 Td (Northstar Supplies Inc) Tj
+0 -28 Td (TAX INVOICE) Tj
+0 -28 Td (Invoice No.: NS-3093) Tj
+0 -28 Td (Issued: November 14, 2026) Tj
+0 -28 Td (Purchase Order: PO-2026-042) Tj
+0 -28 Td (Currency: USD) Tj
+0 -28 Td (Description | Quantity | Unit Price | Amount) Tj
+0 -28 Td (Office equipment | 2 | 1000.00 | 2000.00) Tj
+0 -28 Td (Net Amount) Tj
+0 -28 Td (2000.00) Tj
+0 -28 Td (VAT \(10%\): 200.00) Tj
+0 -28 Td (Total Due USD 2200.00) Tj
+ET
+0.7 0.76 0.67 RG
+50 95 m 545 95 l S
+BT /F1 8 Tf 50 78 Td (Synthetic invoice - InvoicePilot case study test input) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+987
+%%EOF
